@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monolith Domain Analysis — Data Flow Report</title>
+  <style>
+    :root { color-scheme: light; --ink:#172b3a; --muted:#617586; --line:#d6e0e8; --paper:#f4f7fa; --blue:#176b87; --teal:#187a70; --violet:#6254a5; --amber:#a96913; --red:#a24343; }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif }
+    main { max-width:1240px; padding:36px 24px 64px; margin:auto }
+    header { margin-bottom:24px }
+    h1 { margin:0 0 8px; font-size:clamp(28px,4vw,42px); letter-spacing:-.035em; line-height:1.12 }
+    h2 { margin:34px 0 12px; font-size:22px; letter-spacing:-.02em }
+    h3 { margin:0 0 6px; font-size:16px }
+    p { margin:8px 0; color:var(--muted) }
+    .eyebrow { color:var(--blue); font-weight:700; text-transform:uppercase; letter-spacing:.12em; font-size:12px }
+    .summary { max-width:850px; font-size:17px }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; box-shadow:0 8px 24px #213a4a0b }
+    .diagram-wrap { overflow-x:auto; border-radius:12px; background:linear-gradient(145deg,#fbfdff,#f4f8fb); border:1px solid var(--line); padding:14px }
+    svg { display:block; width:100%; min-width:1040px; height:auto }
+    .node rect { fill:#fff; stroke:#cfdae4; stroke-width:2; rx:14 }
+    .node .title { fill:var(--ink); font-size:17px; font-weight:700 }
+    .node .body { fill:#5d7181; font-size:13px }
+    .node.source rect { fill:#eaf5f8; stroke:#90c1ce }
+    .node.parse rect { fill:#eef3ff; stroke:#a7b8e1 }
+    .node.facts rect { fill:#f2efff; stroke:#b8addf }
+    .node.evidence rect { fill:#eef8f3; stroke:#a3cfb6 }
+    .node.embed rect { fill:#fff7e9; stroke:#e6c17c }
+    .node.matrix rect { fill:#f1f4f8; stroke:#aebdca }
+    .node.graph rect { fill:#eaf5f8; stroke:#91c4d2 }
+    .node.louvain rect { fill:#f2efff; stroke:#b7aadf }
+    .node.boundary rect { fill:#eef8f3; stroke:#9dceb2 }
+    .node.output rect { fill:#fff; stroke:#8bbdb0; stroke-width:2.5 }
+    .arrow { fill:none; stroke:#718696; stroke-width:2.4; marker-end:url(#arrow) }
+    .arrow.optional { stroke-dasharray:7 6; stroke:var(--amber) }
+    .arrow.semantic { stroke:var(--violet) }
+    .arrow-label { fill:#52697a; font-size:12px; font-weight:600 }
+    .lane { fill:#718696; font-size:12px; font-weight:700; letter-spacing:.1em }
+    .legend { display:flex; flex-wrap:wrap; gap:10px 22px; margin:14px 4px 0; color:var(--muted); font-size:13px }
+    .legend span { display:flex; align-items:center; gap:8px }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--blue) }
+    .dot.optional { background:var(--amber) }
+    .dot.semantic { background:var(--violet) }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px }
+    .step { padding:17px 18px; border:1px solid var(--line); border-radius:12px; background:#fff }
+    .step p { margin-bottom:0 }
+    .tag { display:inline-block; padding:2px 9px; border-radius:999px; background:#edf2f6; color:#52697a; font-size:12px; font-weight:700 }
+    code { background:#edf2f6; padding:2px 5px; border-radius:5px; font: .9em ui-monospace,SFMono-Regular,Menlo,monospace; color:#27475b }
+    ul { padding-left:21px; color:var(--muted) }
+    li { padding:3px 0 }
+    .note { border-left:4px solid var(--amber); background:#fff8eb; border-radius:0 10px 10px 0; padding:12px 16px; color:#74531f; margin-top:16px }
+    footer { margin-top:34px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:13px }
+    @media (max-width:720px) { main{padding:24px 14px 44px}.grid{grid-template-columns:1fr}.card{padding:12px} }
+    @media print { body{background:#fff}.card,.step{box-shadow:none}.diagram-wrap{break-inside:avoid}main{max-width:none;padding:12px} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Pipeline architecture · data flow</div>
+    <h1>From monolithic source to domain report</h1>
+    <p class="summary">A block diagram and walkthrough of how the domain-decomposer turns Java source (or precomputed facts) into evidence, a weighted class graph, initial Louvain communities, candidate service boundaries, and saved reports.</p>
+  </header>
+
+  <section class="card" aria-labelledby="diagram-heading">
+    <h2 id="diagram-heading" style="margin-top:0">End-to-end block diagram</h2>
+    <p>Follow the arrows from left to right. Dashed paths are optional inputs or conditional evidence.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1480 790" role="img" aria-labelledby="svg-title svg-desc">
+        <title id="svg-title">Monolithic source code data flow through the domain decomposition pipeline</title>
+        <desc id="svg-desc">Source files or facts JSON are parsed into Facts. Structural evidence and semantic embeddings build a feature matrix and cosine graph. Louvain creates initial clusters; service-boundary analysis assigns classes. Results JSON and an HTML domain report are written.</desc>
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#718696"/></marker></defs>
+        <text class="lane" x="32" y="30">INPUT &amp; NORMALIZATION</text>
+        <text class="lane" x="450" y="30">EVIDENCE</text>
+        <text class="lane" x="895" y="30">GRAPH &amp; BOUNDARIES</text>
+        <text class="lane" x="1285" y="30">ARTIFACTS</text>
+
+        <g class="node source"><rect x="30" y="270" width="190" height="118"/><text class="title" x="50" y="303">Monolith input</text><text class="body" x="50" y="331"><tspan x="50">Java source directory / ZIP</tspan><tspan x="50" dy="20">or facts JSON</tspan></text></g>
+        <g class="node parse"><rect x="275" y="270" width="210" height="118"/><text class="title" x="295" y="303">Load &amp; parse</text><text class="body" x="295" y="331"><tspan x="295">Java parser extracts types,</tspan><tspan x="295" dy="20">members, annotations, links</tspan></text></g>
+        <g class="node facts"><rect x="540" y="270" width="195" height="118"/><text class="title" x="560" y="303">Facts model</text><text class="body" x="560" y="331"><tspan x="560">Nodes, references, foreign</tspan><tspan x="560" dy="20">keys, transactions, vectors</tspan></text></g>
+
+        <g class="node evidence"><rect x="785" y="80" width="230" height="126"/><text class="title" x="805" y="113">Structural signals</text><text class="body" x="805" y="141"><tspan x="805">Foreign-key, transaction,</tspan><tspan x="805" dy="20">and data co-access evidence</tspan></text></g>
+        <g class="node embed"><rect x="785" y="265" width="230" height="136"/><text class="title" x="805" y="298">Semantic embeddings</text><text class="body" x="805" y="326"><tspan x="805">Class descriptions → vectors</tspan><tspan x="805" dy="20">Sentence Transformers, or use</tspan><tspan x="805" dy="20">complete vectors from facts JSON</tspan></text></g>
+        <g class="node evidence"><rect x="785" y="470" width="230" height="112"/><text class="title" x="805" y="503">Git evidence</text><text class="body" x="805" y="531"><tspan x="805">Optional co-commit signal</tspan><tspan x="805" dy="20">when --repository has .git</tspan></text></g>
+
+        <g class="node matrix"><rect x="1070" y="260" width="190" height="142"/><text class="title" x="1090" y="293">Feature matrix</text><text class="body" x="1090" y="321"><tspan x="1090">Per-class signal and semantic</tspan><tspan x="1090" dy="20">dimensions + availability masks</tspan><tspan x="1090" dy="20">(Git dimension if available)</tspan></text></g>
+        <g class="node graph"><rect x="1070" y="485" width="190" height="126"/><text class="title" x="1090" y="518">Cosine graph</text><text class="body" x="1090" y="546"><tspan x="1090">Reference candidates + nearest</tspan><tspan x="1090" dy="20">neighbors; threshold edges</tspan></text></g>
+
+        <g class="node louvain"><rect x="1300" y="445" width="155" height="112"/><text class="title" x="1320" y="478">Louvain</text><text class="body" x="1320" y="506"><tspan x="1320">Initial graph</tspan><tspan x="1320" dy="20">communities</tspan></text></g>
+        <g class="node boundary"><rect x="1070" y="660" width="190" height="105"/><text class="title" x="1090" y="693">Service boundaries</text><text class="body" x="1090" y="721"><tspan x="1090">Anchor affinity assigns</tspan><tspan x="1090" dy="20">supporting classes</tspan></text></g>
+        <g class="node output"><rect x="1300" y="630" width="155" height="136"/><text class="title" x="1320" y="663">Output files</text><text class="body" x="1320" y="691"><tspan x="1320">results.json</tspan><tspan x="1320" dy="20">domain_report.html</tspan><tspan x="1320" dy="20">clusters, services,</tspan><tspan x="1320" dy="20">coverage, graph</tspan></text></g>
+
+        <path class="arrow" d="M220 329H267"/><path class="arrow" d="M485 329H532"/><path class="arrow" d="M735 320C760 320 755 143 777 143"/><path class="arrow" d="M735 329H777"/>
+        <path class="arrow optional" d="M735 345C760 345 755 526 777 526"/><text class="arrow-label" x="742" y="455">if Git checkout</text>
+        <path class="arrow semantic" d="M1015 144C1040 144 1040 305 1062 305"/><path class="arrow semantic" d="M1015 333H1062"/><path class="arrow optional" d="M1015 526C1044 526 1040 367 1062 367"/>
+        <path class="arrow" d="M1165 402V477"/><text class="arrow-label" x="1175" y="449">vectors + masks</text>
+        <path class="arrow" d="M1260 548H1292"/><path class="arrow" d="M1377 445V239"/>
+        <path class="arrow semantic" d="M1015 357C1040 357 1040 712 1062 712"/><path class="arrow" d="M735 355C810 410 930 680 1062 704"/><text class="arrow-label" x="835" y="610">Facts + embeddings</text>
+        <path class="arrow" d="M1260 712H1292"/>
+        <path class="arrow" d="M1377 557V622"/>
+      </svg>
+    </div>
+    <div class="legend"><span><i class="dot"></i>Core pipeline</span><span><i class="dot semantic"></i>Semantic vectors</span><span><i class="dot optional"></i>Optional evidence/input</span></div>
+    <div class="note"><strong>Execution detail:</strong> the implementation computes these evidence maps in a normal pipeline run (not a parallel worker graph). Louvain labels are the raw graph communities; service boundaries are a separate assignment based on service anchors and affinities.</div>
+  </section>
+
+  <section>
+    <h2>Stage-by-stage report</h2>
+    <div class="grid">
+      <article class="step"><span class="tag">01 · Input</span><h3>Accept source code or existing facts</h3><p><code>--source</code> accepts Java source, a ZIP, or a precomputed facts JSON. JSON inputs skip source parsing; Java inputs are parsed into the same payload shape.</p></article>
+      <article class="step"><span class="tag">02 · Parse &amp; normalize</span><h3>Build the Facts model</h3><p>The parser collects class/interface nodes, package and role, annotations, fields, method signatures, documentation, references, relationship annotations, and transaction annotations. <code>Facts.from_json</code> normalizes this payload for analysis.</p></article>
+      <article class="step"><span class="tag">03 · Evidence</span><h3>Extract structural signals</h3><p>Foreign-key relationships, transaction participation, and data co-access are calculated from available facts. If <code>--repository</code> points to a Git checkout, co-commit evidence is included as another signal.</p></article>
+      <article class="step"><span class="tag">04 · Semantics</span><h3>Represent class meaning as vectors</h3><p>Descriptions are assembled from class identity, package, role, annotations, fields, methods, related classes, and documentation. The default model is <code>sentence-transformers/all-MiniLM-L6-v2</code>. A complete, dimension-consistent embedding set already present in facts JSON is reused instead.</p></article>
+      <article class="step"><span class="tag">05 · Features</span><h3>Combine signals per class</h3><p>The feature matrix joins available structural signals with semantic dimensions, and tracks a mask so unavailable values are not treated as observed values. Git adds a feature only when that evidence is enabled.</p></article>
+      <article class="step"><span class="tag">06 · Similarity graph</span><h3>Connect related classes</h3><p>Candidate edges come from source references and each node’s nearest neighbors. Cosine similarity is calculated over jointly available features; edges below <code>--min-cosine</code> are discarded.</p></article>
+      <article class="step"><span class="tag">07 · Initial clusters</span><h3>Detect Louvain communities</h3><p>Weighted Louvain runs on the cosine graph with the selected resolution and seed. It produces numeric community labels and a modularity score; these are not automatically domain names.</p></article>
+      <article class="step"><span class="tag">08 · Candidate services</span><h3>Assign classes to service anchors</h3><p>Service anchors are identified from roles and names. Supporting classes are assigned using references, package proximity, name-token overlap, and embedding affinity; low-affinity and ambiguous assignments are recorded.</p></article>
+      <article class="step"><span class="tag">09 · Deliverables</span><h3>Write machine-readable and human-readable results</h3><p><code>results.json</code> stores communities, service assignments, embedding provenance, features, masks, graph edges, and modularity. <code>domain_report.html</code> renders the interactive graph, cluster and service tables, and signal coverage.</p></article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Inputs, configuration, and important behavior</h2>
+    <div class="card">
+      <ul>
+        <li><strong>Required:</strong> a source directory/ZIP or facts JSON; an output directory (defaults to <code>outputs</code>).</li>
+        <li><strong>Optional Git signal:</strong> pass <code>--repository /path/to/checkout</code>. Git co-commit analysis is added only if that path contains <code>.git</code>.</li>
+        <li><strong>Semantic dependency:</strong> when embeddings are missing or incomplete, the default implementation imports Sentence Transformers and generates vectors. Install the project extra with <code>python -m pip install -e '.[semantic]'</code>. A complete supplied embedding set avoids model generation.</li>
+        <li><strong>Graph tuning:</strong> <code>--nearest-neighbors</code>, <code>--min-cosine</code>, <code>--resolution</code>, and <code>--seed</code> affect graph construction and community detection.</li>
+        <li><strong>Report location:</strong> the CLI prints the path of the generated <code>domain_report.html</code>; the JSON is written alongside it as <code>results.json</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>Generated as a static, self-contained HTML architecture report from the current domain-decomposer pipeline. The SVG diagram can be printed or saved as PDF from the browser.</footer>
+</main>
+</body>
+</html>
