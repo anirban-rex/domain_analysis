@@ -1,0 +1,6 @@
+resolution: 1.0
+seed: 42
+nearest_neighbors: 8
+min_cosine: 0.05
+semantic_dimensions: 16
+git_include_merges: false
