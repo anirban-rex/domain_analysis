@@ -1,6 +1,13 @@
 resolution: 1.0
 seed: 42
 nearest_neighbors: 8
-min_cosine: 0.05
-semantic_dimensions: 16
+minimum_edge_weight: 0.08
+minimum_semantic_similarity: 0.45
 git_include_merges: false
+signal_weights:
+  reference: 0.23
+  workflow: 0.23
+  foreign_key: 0.18
+  semantic: 0.23
+  package: 0.05
+  git_cocommit: 0.08

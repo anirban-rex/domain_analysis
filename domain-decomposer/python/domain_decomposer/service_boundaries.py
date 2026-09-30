@@ -20,19 +20,22 @@ def _tokens(value: str) -> set[str]:
 
 def _is_service_anchor(node: Any) -> bool:
     name = node.fqcn.rsplit(".", 1)[-1]
-    role = node.role.lower()
+    role = str(node.role or "").lower()
     lowered = name.lower()
+    annotations = {str(annotation).rsplit(".", 1)[-1].lower() for annotation in (node.attributes or {}).get("annotations", []) or []}
     if lowered.endswith(("successhandler", "accessdeniedhandler", "exceptionhandler", "failurehandler")):
         return False
     if ".security." in node.package or ".common." in node.package:
-        return role == "service" and lowered.endswith("service")
-    return role in {"service", "use_case", "manager"} or lowered.endswith(("service", "serviceimpl", "usecase", "manager"))
+        return role == "service" or "service" in annotations
+    return (
+        role in ROLE_ANCHORS
+        or bool(annotations & {"service", "usecase"})
+        or lowered.endswith(("service", "serviceimpl", "usecase", "manager"))
+    )
 
 
 def _service_key(node: Any) -> str:
-    name = node.fqcn.rsplit(".", 1)[-1]
-    name = re.sub(r"ServiceImpl$", "Service", name)
-    return name
+    return node.fqcn
 
 
 def _cosine(left: list[float], right: list[float]) -> float:

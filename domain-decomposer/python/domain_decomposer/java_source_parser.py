@@ -10,7 +10,7 @@ JAVA_FILE = re.compile(r"(?:^|/)src/main/java/(.+\.java)$")
 PACKAGE = re.compile(r"\bpackage\s+([\w.]+)\s*;")
 TYPE_DECLARATION = re.compile(r"\b(?:class|interface|enum|record)\s+(\w+)")
 IMPORT = re.compile(r"\bimport\s+(?:static\s+)?([\w.]+)\s*;")
-ANNOTATION = re.compile(r"@(?:javax\.persistence\.|jakarta\.persistence\.|org\.springframework\.transaction\.annotation\.)?(\w+)(?:\s*\(([^)]*)\))?")
+ANNOTATION = re.compile(r"@(?:[\w]+\.)*(\w+)(?:\s*\(([^)]*)\))?")
 FIELD_RELATION = re.compile(r"@(ManyToOne|OneToMany|OneToOne|ManyToMany)\s*(?:\(([^)]*)\))?\s*(?:private|protected|public)?\s*(?:final\s+)?([\w.$<>?, ]+)\s+(\w+)\s*;", re.MULTILINE)
 FIELD = re.compile(r"(?:private|protected|public)\s+(?:final\s+)?([\w.$<>?, ]+)\s+(\w+)\s*(?:=[^;]+)?;", re.MULTILINE)
 METHOD = re.compile(r"(?:public|protected|private|static|final|synchronized|\s)+[\w<>, ?\[\].]+\s+(\w+)\s*\([^)]*\)\s*\{", re.MULTILINE)
@@ -52,12 +52,24 @@ def parse(source: str | Path) -> dict:
             continue
         simple_name = declaration.group(1)
         fqcn = f"{package}.{simple_name}" if package else simple_name
-        role = "class"
-        lowered = simple_name.lower()
-        for suffix, candidate in (("controller", "controller"), ("service", "service"), ("repository", "repository")):
-            if lowered.endswith(suffix):
-                role = candidate
         annotations = [name for name, _ in ANNOTATION.findall(text)]
+        role = "class"
+        annotation_roles = {
+            "restcontroller": "controller",
+            "controller": "controller",
+            "service": "service",
+            "repository": "repository",
+            "usecase": "use_case",
+        }
+        for annotation in annotations:
+            if annotation.lower() in annotation_roles:
+                role = annotation_roles[annotation.lower()]
+                break
+        if role == "class":
+            lowered = simple_name.lower()
+            for suffix, candidate in (("controller", "controller"), ("service", "service"), ("repository", "repository")):
+                if lowered.endswith(suffix):
+                    role = candidate
         fields = [{"type": field_type.strip(), "name": field_name} for field_type, field_name in FIELD.findall(text)]
         methods = [name for name in METHOD.findall(text) if name]
         method_signatures = [

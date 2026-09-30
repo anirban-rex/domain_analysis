@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Proposed end-to-end workflow for using static-analysis signals to discover candidate domains, validate module boundaries, and incrementally extract microservices.">
+  <title>From Signals to Domains to Microservices</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172b3a;
+      --muted: #5d7181;
+      --line: #d6e0e8;
+      --paper: #f3f7fa;
+      --blue: #176b87;
+      --teal: #187a70;
+      --violet: #6254a5;
+      --amber: #a96913;
+      --rose: #9b4f5d;
+      --white: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 1320px; margin: auto; padding: 38px 24px 64px; }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0 0 10px; font-size: clamp(30px, 5vw, 48px); line-height: 1.08; letter-spacing: -.04em; }
+    h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: -.02em; }
+    h3 { margin: 0 0 6px; font-size: 17px; }
+    p { margin: 8px 0; color: var(--muted); }
+    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    .intro { max-width: 900px; font-size: 17px; }
+    .card { margin-top: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--white); box-shadow: 0 10px 28px #213a4a0b; }
+    .callout { margin-top: 16px; padding: 13px 16px; border-left: 4px solid var(--amber); border-radius: 0 10px 10px 0; background: #fff8eb; color: #74531f; }
+    .diagram-wrap { overflow-x: auto; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #fbfdff, #f3f7fa); }
+    svg { display: block; width: 100%; min-width: 1120px; height: auto; }
+    .lane { fill: #718696; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+    .node rect { fill: #fff; stroke: #cbd8e2; stroke-width: 2; rx: 15; }
+    .node .num { fill: #fff; font-size: 12px; font-weight: 800; }
+    .node .title { fill: var(--ink); font-size: 16px; font-weight: 750; }
+    .node .body { fill: #586e7e; font-size: 12.5px; }
+    .node .badge { fill: var(--blue); }
+    .node.input rect { fill: #eaf5f8; stroke: #90c1ce; }
+    .node.signal rect { fill: #eef8f3; stroke: #a3cfb6; }
+    .node.graph rect { fill: #eaf5f8; stroke: #91c4d2; }
+    .node.cluster rect { fill: #f2efff; stroke: #b7aadf; }
+    .node.domain rect { fill: #eef8f3; stroke: #9dceb2; }
+    .node.module rect { fill: #fff7e9; stroke: #e6c17c; }
+    .node.contract rect { fill: #f9eff2; stroke: #d5aab2; }
+    .node.extract rect { fill: #edf3ff; stroke: #a7b8e1; }
+    .arrow { fill: none; stroke: #718696; stroke-width: 2.6; marker-end: url(#arrow); }
+    .arrow.evidence { stroke: var(--teal); }
+    .arrow.optional { stroke: var(--amber); stroke-dasharray: 7 6; }
+    .arrow-label { fill: #52697a; font-size: 11px; font-weight: 700; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 14px 3px 0; color: var(--muted); font-size: 13px; }
+    .legend span { display: flex; align-items: center; gap: 8px; }
+    .swatch { width: 11px; height: 11px; border-radius: 4px; background: var(--teal); }
+    .swatch.optional { background: var(--amber); }
+    .swatch.decision { background: var(--violet); }
+    .section-intro { margin-top: -5px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .step { min-height: 170px; padding: 17px 18px; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
+    .step p { margin-bottom: 0; }
+    .tag { display: inline-block; margin-bottom: 8px; padding: 2px 9px; border-radius: 999px; background: #edf2f6; color: #52697a; font-size: 12px; font-weight: 800; }
+    .formula { overflow-x: auto; margin: 12px 0; padding: 12px 15px; border: 1px solid var(--line); border-radius: 10px; background: #f7fafc; color: #23465b; font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+    ul { padding-left: 21px; color: var(--muted); }
+    li { padding: 3px 0; }
+    .two-col { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; }
+    .subcard { padding: 16px 18px; border: 1px solid var(--line); border-radius: 13px; background: #fbfdff; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pill { padding: 4px 9px; border: 1px solid #d6e3e9; border-radius: 999px; background: #f2f8fa; color: #34576b; font-size: 12px; font-weight: 700; }
+    footer { margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 620px) { main { padding: 25px 14px 44px; } .card { padding: 14px; } .grid { grid-template-columns: 1fr; } }
+    @media print { body { background: #fff; } main { max-width: none; padding: 10px; } .card, .step { box-shadow: none; break-inside: avoid; } .diagram-wrap { overflow: visible; } svg { min-width: 0; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Architecture plan · proposed workflow</div>
+    <h1>From signals to domains to microservices</h1>
+    <p class="intro">A staged workflow for extracting relationship-level evidence, using a weighted class graph and Louvain to propose candidate domains, validating those boundaries, and only later extracting suitable modules as microservices.</p>
+  </header>
+
+  <section class="card" aria-labelledby="flow-heading">
+    <h2 id="flow-heading">End-to-end flow</h2>
+    <p>Read left to right across each row, then follow the connector to the next row. Dashed evidence is optional. The diagram describes the proposed target process, not the behavior of the current implementation.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1420 720" role="img" aria-labelledby="svg-title svg-desc">
+        <title id="svg-title">End-to-end process from source code to extracted microservices</title>
+        <desc id="svg-desc">Parse code, extract typed pairwise evidence, build a weighted cohesion graph, run Louvain, validate candidate domains, modularize in the monolith, analyze cross-module dependencies, define contracts, assess readiness, and extract incrementally.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#718696"/></marker>
+        </defs>
+        <text class="lane" x="35" y="28">ANALYSIS · CANDIDATE DOMAINS</text>
+        <text class="lane" x="35" y="260">VALIDATION · MODULAR MONOLITH</text>
+        <text class="lane" x="35" y="492">EXTRACTION · MICROSERVICES</text>
+
+        <!-- Row 1 flows left to right. -->
+        <g class="node input"><rect x="35" y="48" width="285" height="142"/><circle class="badge" cx="60" cy="74" r="13"/><text class="num" x="56" y="78">01</text><text class="title" x="82" y="80">Parse and normalize</text><text class="body" x="55" y="111"><tspan x="55">Source / facts → stable class IDs,</tspan><tspan x="55" dy="19">roles, references, entities, methods</tspan><tspan x="55" dy="19">and available framework metadata.</tspan></text></g>
+        <g class="node signal"><rect x="395" y="48" width="285" height="142"/><circle class="badge" cx="420" cy="74" r="13"/><text class="num" x="416" y="78">02</text><text class="title" x="442" y="80">Extract typed evidence</text><text class="body" x="415" y="111"><tspan x="415">Keep pairwise relationships and</tspan><tspan x="415" dy="19">provenance—not just per-class counts.</tspan><tspan x="415" dy="19">Discover anchors from roles/rules.</tspan></text></g>
+        <g class="node graph"><rect x="755" y="48" width="285" height="142"/><circle class="badge" cx="780" cy="74" r="13"/><text class="num" x="776" y="78">03</text><text class="title" x="802" y="80">Build cohesion graph</text><text class="body" x="775" y="111"><tspan x="775">Classes = nodes; evidence of shared</tspan><tspan x="775" dy="19">ownership/responsibility = weighted</tspan><tspan x="775" dy="19">edges. Keep calls typed and directed.</tspan></text></g>
+        <g class="node cluster"><rect x="1115" y="48" width="285" height="142"/><circle class="badge" cx="1140" cy="74" r="13"/><text class="num" x="1136" y="78">04</text><text class="title" x="1162" y="80">Run Louvain</text><text class="body" x="1135" y="111"><tspan x="1135">Assign every class to a provisional</tspan><tspan x="1135" dy="19">community. Anchors help label it;</tspan><tspan x="1135" dy="19">they do not force boundaries.</tspan></text></g>
+        <path class="arrow evidence" d="M320 119H385"/><path class="arrow evidence" d="M680 119H745"/><path class="arrow evidence" d="M1040 119H1105"/>
+
+        <!-- Turn down and flow right-to-left through validation. -->
+        <path class="arrow" d="M1258 190V232H1040V276"/>
+        <g class="node domain"><rect x="755" y="278" width="285" height="142"/><circle class="badge" cx="780" cy="304" r="13"/><text class="num" x="776" y="308">05</text><text class="title" x="802" y="310">Review candidate domains</text><text class="body" x="775" y="341"><tspan x="775">Check anchors, data ownership,</tspan><tspan x="775" dy="19">cohesion, signal conflicts, and</tspan><tspan x="775" dy="19">shared / uncertain classes.</tspan></text></g>
+        <g class="node module"><rect x="395" y="278" width="285" height="142"/><circle class="badge" cx="420" cy="304" r="13"/><text class="num" x="416" y="308">06</text><text class="title" x="442" y="310">Modularize in monolith</text><text class="body" x="415" y="341"><tspan x="415">Create explicit packages and module</tspan><tspan x="415" dy="19">ownership for classes, data, and</tspan><tspan x="415" dy="19">business rules before deployment.</tspan></text></g>
+        <g class="node module"><rect x="35" y="278" width="285" height="142"/><circle class="badge" cx="60" cy="304" r="13"/><text class="num" x="56" y="308">07</text><text class="title" x="82" y="310">Analyze boundary cuts</text><text class="body" x="55" y="341"><tspan x="55">Find directed calls/data access across</tspan><tspan x="55" dy="19">modules. Similarity-only edges are</tspan><tspan x="55" dy="19">not API dependencies.</tspan></text></g>
+        <path class="arrow" d="M1115 349H1050"/><path class="arrow" d="M755 349H690"/><path class="arrow" d="M395 349H330"/>
+
+        <!-- Turn down and flow left-to-right through extraction. -->
+        <path class="arrow" d="M177 420V464H177V506"/>
+        <g class="node contract"><rect x="35" y="508" width="285" height="142"/><circle class="badge" cx="60" cy="534" r="13"/><text class="num" x="56" y="538">08</text><text class="title" x="82" y="540">Define contracts</text><text class="body" x="55" y="571"><tspan x="55">Choose module API, HTTP API, event,</tspan><tspan x="55" dy="19">or read model per dependency. Map</tspan><tspan x="55" dy="19">existing HTTP routes separately.</tspan></text></g>
+        <g class="node domain"><rect x="395" y="508" width="285" height="142"/><circle class="badge" cx="420" cy="534" r="13"/><text class="num" x="416" y="538">09</text><text class="title" x="442" y="540">Assess readiness</text><text class="body" x="415" y="571"><tspan x="415">Verify data ownership, local writes,</tspan><tspan x="415" dy="19">tests, deployment, monitoring, and</tspan><tspan x="415" dy="19">migration/rollback strategy.</tspan></text></g>
+        <g class="node extract"><rect x="755" y="508" width="285" height="142"/><circle class="badge" cx="780" cy="534" r="13"/><text class="num" x="776" y="538">10</text><text class="title" x="802" y="540">Extract incrementally</text><text class="body" x="775" y="571"><tspan x="775">Start with one lower-risk candidate;</tspan><tspan x="775" dy="19">validate contracts and operations,</tspan><tspan x="775" dy="19">then continue domain by domain.</tspan></text></g>
+        <g class="node extract"><rect x="1115" y="508" width="285" height="142"/><circle class="badge" cx="1140" cy="534" r="13"/><text class="num" x="1136" y="538">11</text><text class="title" x="1162" y="540">Measure and refine</text><text class="body" x="1135" y="571"><tspan x="1135">Track coupling, ownership, incidents,</tspan><tspan x="1135" dy="19">and boundary quality; revise the</tspan><tspan x="1135" dy="19">candidate map when evidence changes.</tspan></text></g>
+        <path class="arrow" d="M320 579H385"/><path class="arrow" d="M680 579H745"/><path class="arrow" d="M1040 579H1105"/>
+      </svg>
+    </div>
+    <div class="legend"><span><i class="swatch"></i>Signal and graph stages</span><span><i class="swatch decision"></i>Clustering and review decisions</span><span><i class="swatch optional"></i>Optional evidence such as Git history</span></div>
+    <div class="callout"><strong>Important distinction:</strong> a Louvain community is a candidate domain, not automatically a deployable microservice. Cross-community calls are coupling to analyze—not edges to blindly delete or convert to REST.</div>
+  </section>
+
+  <section class="card" aria-labelledby="signals-heading">
+    <h2 id="signals-heading">Evidence used to build the graph</h2>
+    <p class="section-intro">Use pairwise evidence to create cohesion edges. Preserve directed dependencies separately so interaction is not confused with ownership.</p>
+    <div class="two-col">
+      <div class="subcard">
+        <h3>Candidate pairwise signals</h3>
+        <div class="pill-row">
+          <span class="pill">Data ownership / access</span><span class="pill">Transaction overlap</span><span class="pill">Data co-access</span><span class="pill">Internal references</span><span class="pill">Semantic similarity</span><span class="pill">Package proximity</span><span class="pill">Optional Git co-change</span>
+        </div>
+        <p>Foreign keys and API calls express relationships, but do not alone prove shared ownership. Weight them according to evidence meaning and record their provenance.</p>
+      </div>
+      <div class="subcard">
+        <h3>Availability-aware affinity</h3>
+        <div class="formula">Aᵢⱼ = Σₖ αₖ mᵢⱼ⁽ᵏ⁾ sᵢⱼ⁽ᵏ⁾ / Σₖ αₖ mᵢⱼ⁽ᵏ⁾</div>
+        <p><strong>s</strong> is a pair's score; <strong>α</strong> is a configurable signal weight; <strong>m</strong> is 1 only when that evidence is available. Missing evidence is masked, not treated as a zero relationship.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="phases-heading">
+    <h2 id="phases-heading">Phase outputs and decision gates</h2>
+    <div class="grid">
+      <article class="step"><span class="tag">Analysis</span><h3>Evidence bundle</h3><p>Normalized classes, role/anchor candidates, typed pairwise relationships, coverage, and source provenance. Include explicit unavailable-signal metadata.</p></article>
+      <article class="step"><span class="tag">Graph</span><h3>Weighted graph and communities</h3><p>Class nodes, cohesion edge weights, separate directed dependency records, Louvain community IDs, and clustering parameters.</p></article>
+      <article class="step"><span class="tag">Domain review</span><h3>Candidate domain map</h3><p>Community members, anchors, data ownership evidence, confidence, ambiguous/shared classes, and reasons to keep anchors together or separate.</p></article>
+      <article class="step"><span class="tag">Modularization</span><h3>Module ownership map</h3><p>Approved class and data ownership, module APIs, unresolved dependency violations, cross-module transactions, and focused validation results.</p></article>
+      <article class="step"><span class="tag">Contract design</span><h3>Boundary dependency inventory</h3><p>Consumer/provider, operation, source evidence, data exchanged, and proposed in-process API, HTTP API, event, or read-model pattern.</p></article>
+      <article class="step"><span class="tag">Extraction gate</span><h3>Readiness and migration plan</h3><p>Independent build/test/deploy readiness, data migration, observability, failure handling, rollout, rollback, and extraction order.</p></article>
+    </div>
+  </section>
+
+  <footer>Proposed architecture workflow for planning and implementation. It intentionally separates domain discovery from microservice deployment and keeps uncertain boundaries visible for review.</footer>
+</main>
+</body>
+</html>
